@@ -163,19 +163,22 @@ fn handle_x(app: &AppRc, ev: TrayEvent) {
             }
         }
         TrayEvent::Leave => a.tooltip.borrow_mut().cancel(),
-        TrayEvent::Button { win, button, x, y, time } => {
+        TrayEvent::Button { win, button, x, y, time, release } => {
             a.tooltip.borrow_mut().cancel();
             let Some(i) = a.item_by_win(win) else { return };
             let item = &a.items[i];
             let proxy = item.proxy.clone();
             let (x, y) = (x as i32, y as i32);
             let wants_menu = button == 3 || (button == 1 && item.props.item_is_menu);
+            if wants_menu != release {
+                return;
+            }
             if wants_menu {
+                a.tray.ungrab(time);
                 if item.props.menu.is_some() {
-                    a.tray.ungrab(time);
                     let key = item.key.clone();
                     drop(a);
-                    glib::MainContext::default().spawn_local(show_menu(app.clone(), key, button as u32, x, y));
+                    glib::MainContext::default().spawn_local(show_menu(app.clone(), key, button as u32, time, x, y));
                 } else {
                     spawn_call(async move { proxy.context_menu(x, y).await });
                 }
@@ -202,7 +205,7 @@ fn spawn_call<F: std::future::Future<Output = zbus::Result<()>> + 'static>(f: F)
     });
 }
 
-async fn show_menu(app: AppRc, key: String, button: u32, x: i32, y: i32) {
+async fn show_menu(app: AppRc, key: String, button: u32, time: u32, x: i32, y: i32) {
     let (conn, bus, path, proxy) = {
         let a = app.borrow();
         let Some(i) = a.item_by_key(&key) else { return };
@@ -213,7 +216,7 @@ async fn show_menu(app: AppRc, key: String, button: u32, x: i32, y: i32) {
         Ok(layout) => {
             let target = Rc::new(ui::MenuTarget { conn, bus, path });
             let menu = ui::build_menu(&layout, &target);
-            menu.popup_easy(button, 0);
+            menu.popup_easy(button, time);
             let mut a = app.borrow_mut();
             if let Some(i) = a.item_by_key(&key) {
                 a.items[i].menu = Some(menu);

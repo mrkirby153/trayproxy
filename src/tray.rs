@@ -64,7 +64,7 @@ pub enum TrayEvent {
     ManagerGone,
     Expose(Window),
     Resized(Window, u16, u16),
-    Button { win: Window, button: u8, x: i16, y: i16, time: u32 },
+    Button { win: Window, button: u8, x: i16, y: i16, time: u32, release: bool },
     Enter { win: Window },
     Leave,
 }
@@ -175,6 +175,7 @@ impl Tray {
         let events = EventMask::EXPOSURE
             | EventMask::STRUCTURE_NOTIFY
             | EventMask::BUTTON_PRESS
+            | EventMask::BUTTON_RELEASE
             | EventMask::ENTER_WINDOW
             | EventMask::LEAVE_WINDOW;
         let size = DEFAULT_SIZE;
@@ -361,6 +362,15 @@ impl Tray {
                     x: e.root_x,
                     y: e.root_y,
                     time: e.time,
+                    release: false,
+                }),
+                Event::ButtonRelease(e) => Some(TrayEvent::Button {
+                    win: e.event,
+                    button: e.detail,
+                    x: e.root_x,
+                    y: e.root_y,
+                    time: e.time,
+                    release: true,
                 }),
                 Event::EnterNotify(e) => Some(TrayEvent::Enter { win: e.event }),
                 Event::LeaveNotify(_) => Some(TrayEvent::Leave),
